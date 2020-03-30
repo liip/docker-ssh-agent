@@ -1,0 +1,98 @@
+#!/bin/sh
+set -e;
+
+# Add a single SSH key
+ssh_key_add()
+{
+	ssh_key_name="${1}";
+	if [ "${ssh_key_name}" = '' ]; then
+    echo 'SSH key name is missing' >&2;
+    return 1;
+  fi;
+
+	ssh_key_path="${SSH_DIR}/${ssh_key_name}";
+  if [ ! -f "${ssh_key_path}" ]; then
+    echo "SSH key not found" >&2;
+    return 1;
+  fi;
+
+  cp -f "${ssh_key_path}" "${SSH_KEYS_DIR}/${ssh_key_name}";
+
+	return $(ssh-add "${SSH_KEYS_DIR}/${ssh_key_name}");
+}
+
+# List SSH keys
+ssh_key_list()
+{
+	ssh-add -l;
+}
+
+# Load SSH keys
+ssh_key_load()
+{
+  for filename in $(find "${SSH_KEYS_DIR}" -type f); do
+    ssh-add "${filename}";
+  done
+}
+
+# Remove a single SSH key
+ssh_key_remove()
+{
+	ssh_key_name="${1}";
+	if [ "${ssh_key_name}" = '' ]; then
+    echo 'SSH key name is missing' >&2;
+    return 1;
+  fi;
+
+	ssh_key_path="${SSH_DIR}/${ssh_key_name}";
+  if [ ! -f "${ssh_key_path}" ]; then
+    echo "SSH key not found" >&2;
+    return 1;
+  fi;
+
+  ssh_key_private_path="${SSH_KEYS_DIR}/${ssh_key_name}";
+  ssh_key_public_path="${SSH_KEYS_DIR}/${ssh_key_name}.pub";
+  if [ ! -f "${ssh_key_public_path}" ]; then
+    ssh-keygen -y -f "${ssh_key_private_path}" > "${ssh_key_public_path}";
+  fi;
+
+  if output=$(ssh-add -d "${ssh_key_private_path}"); then
+      rm -f "${ssh_key_private_path}" "${ssh_key_public_path}";
+  fi;
+
+  return ${output};
+}
+
+# Remove all SSH keys
+ssh_key_remove_all()
+{
+	rm -f "${SSH_KEYS_DIR}/*";
+
+  return $(ssh-add -D);
+}
+
+# Commands
+case "$1" in
+	add)
+    shift;
+    ssh_key_add "$@";
+    ;;
+	list)
+		shift;
+		ssh_key_list;
+		;;
+	load)
+		shift;
+		ssh_key_load;
+		;;
+	remove)
+		shift;
+		ssh_key_remove "$@";
+		;;
+	remove-all)
+		shift;
+		ssh_key_remove_all;
+		;;
+	*)
+	  echo "Usage: ssh-key add|list|load|remove|remove-all";
+esac
